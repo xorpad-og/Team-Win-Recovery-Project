@@ -1,4 +1,4 @@
-# Copyright (C) 2007 The Android Open Source Project
+# Copyright 2015 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,8 +44,35 @@
 #$(call add-clean-step, find $(OUT_DIR) -type f -name "IGTalkSession*" -print0 | xargs -0 rm -f)
 #$(call add-clean-step, rm -rf $(PRODUCT_OUT)/data/*)
 
-# ************************************************
-# NEWER CLEAN STEPS MUST BE AT THE END OF THE LIST
-# ************************************************
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/obj/EXECUTABLES/recovery_intermediates)
-$(call add-clean-step, rm -rf $(PRODUCT_OUT)/obj/STATIC_LIBRARIES/libminui_intermediates/import_includes)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, rm -rf $(OUT_DIR)/target/product/bullhead/system/build.prop)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/system/build.prop)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/obj/ETC/system_build_prop_intermediates/build.prop)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
+$(call add-clean-step, find $(OUT_DIR)/target/product/bullhead/ -name \*build.prop* -exec rm -rf {} \;)
