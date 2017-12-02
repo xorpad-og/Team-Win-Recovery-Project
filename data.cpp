@@ -820,6 +820,50 @@ void DataManager::SetDefaultValues()
 	mConst.SetValue("tw_has_mtp", "0");
 	mConst.SetValue("tw_mtp_enabled", "0");
 #endif
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	// rotation is unused, keep for info
+	/*
+	#if defined(TW_HAS_LANDSCAPE) && defined(TW_DEFAULT_ROTATION)
+		mValues.insert(make_pair(TW_ROTATION, make_pair(EXPAND(TW_DEFAULT_ROTATION), 1)));
+	#else
+		mValues.insert(make_pair(TW_ROTATION, make_pair("0", 1)));
+	#endif
+		mValues.insert(make_pair(TW_ENABLE_ROTATION, make_pair("0", 0)));
+	*/
+
+	// doesn't seem to be used but add it back anyway
+	mConst.SetValue("tw_device_name", TARGET_DEVICE);
+
+#ifdef TW_MROM_REC_VERSION_STR
+	// mrom build version needed by splash (parse it just like in multirom.cpp)
+	if (strlen(TW_MROM_REC_VERSION_STR) == sizeof("YYYYMMDD-PP")-1 ||
+		strlen(TW_MROM_REC_VERSION_STR) == sizeof("YYYYMMDD")-1)
+	{
+		int patch;
+		std::string res(TW_MROM_REC_VERSION_STR, sizeof("YYYYMMDD")-1);
+
+		res.insert(6, "-");
+		res.insert(4, "-");
+
+		if (strlen(TW_MROM_REC_VERSION_STR) == sizeof("YYYYMMDD-PP")-1 &&
+		    (patch = atoi(TW_MROM_REC_VERSION_STR+sizeof("YYYYMMDD-")-1)) > 0)
+		{
+			char buff[5];
+			snprintf(buff, sizeof(buff), " p%d", patch);
+			res += buff;
+		}
+
+		//res.insert(0, "_"); //we dont want that forced in the xml
+		SetValue(TW_MROM_REC_VERSION_VAR, res);
+	}
+#endif
+
+	mPersist.SetValue(TW_AUTO_INJECT_MROM, "1");
+
+	mConst.SetValue("tw_is_multirom", "1");
+#else
+	mConst.SetValue("tw_is_multirom", "0");
+#endif //TARGET_RECOVERY_IS_MULTIROM
 	mPersist.SetValue("tw_mount_system_ro", "2");
 	mPersist.SetValue("tw_never_show_system_ro_page", "0");
 	mPersist.SetValue("tw_language", EXPAND(TW_DEFAULT_LANGUAGE));

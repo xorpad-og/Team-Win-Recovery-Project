@@ -80,6 +80,16 @@ ifeq ($(TW_ROUND_SCREEN), true)
     LOCAL_CFLAGS += -DTW_ROUND_SCREEN
 endif
 
+#MultiROM
+ifeq ($(TARGET_RECOVERY_IS_MULTIROM), true)
+    LOCAL_CFLAGS += -DTARGET_RECOVERY_IS_MULTIROM
+
+    MR_NO_KEXEC_MK_OPTIONS := true 1 allowed 2 enabled 3 ui_confirm 4 ui_choice 5 forced
+    ifneq (,$(filter $(MR_NO_KEXEC), $(MR_NO_KEXEC_MK_OPTIONS)))
+        LOCAL_CFLAGS += -DMR_NO_KEXEC
+    endif
+endif
+
 LOCAL_C_INCLUDES += \
     bionic \
     system/core/include \
@@ -170,6 +180,9 @@ ifeq ($(TW_CUSTOM_THEME),)
     endif
 
     TWRP_RES += $(commands_recovery_local_path)/gui/theme/common/$(word 1,$(subst _, ,$(TW_THEME))).xml
+    ifeq ($(TARGET_RECOVERY_IS_MULTIROM),true)
+        TWRP_RES += $(commands_recovery_local_path)/gui/theme/common/$(word 1,$(subst _, ,$(TW_THEME)))_multirom.xml
+    endif
     # for future copying of used include xmls and fonts:
     # UI_XML := $(TWRP_THEME_LOC)/ui.xml
     # TWRP_INCLUDE_XMLS := $(shell xmllint --xpath '/recovery/include/xmlfile/@name' $(UI_XML)|sed -n 's/[^\"]*\"\([^\"]*\)\"[^\"]*/\1\n/gp'|sort|uniq)

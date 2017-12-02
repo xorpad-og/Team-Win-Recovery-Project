@@ -230,6 +230,12 @@ int TWPartitionManager::Write_Fstab(void) {
 		return false;
 	}
 	for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+		if (!(*iter)->Bind_Of.empty()) {
+			Line = (*iter)->Primary_Block_Device + " " + (*iter)->Mount_Point + " bind bind\n";
+			fputs(Line.c_str(), fp);
+		} else
+#endif //TARGET_RECOVERY_IS_MULTIROM
 		if ((*iter)->Can_Be_Mounted) {
 			Line = (*iter)->Actual_Block_Device + " " + (*iter)->Mount_Point + " " + (*iter)->Current_File_System + " rw 0 0\n";
 			fputs(Line.c_str(), fp);
@@ -275,6 +281,9 @@ void TWPartitionManager::Output_Partition(TWPartition* Part) {
 	if (Part->Can_Be_Mounted) {
 		printf(" Used: %iMB Free: %iMB Backup Size: %iMB", (int)(Part->Used / mb), (int)(Part->Free / mb), (int)(Part->Backup_Size / mb));
 	}
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	printf(" Raw size: %llu\n", Part->Size_Raw);
+#endif //TARGET_RECOVERY_IS_MULTIROM
 	printf("\n   Flags: ");
 	if (Part->Can_Be_Mounted)
 		printf("Can_Be_Mounted ");
@@ -365,6 +374,10 @@ void TWPartitionManager::Output_Partition(TWPartition* Part) {
 		printf("   Format_Block_Size: %lu\n", Part->Format_Block_Size);
 	if (!Part->MTD_Name.empty())
 		printf("   MTD_Name: %s\n", Part->MTD_Name.c_str());
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	if (!Part->Bind_Of.empty())
+		printf("   Bind_Of: %s\n", Part->Bind_Of.c_str());
+#endif //TARGET_RECOVERY_IS_MULTIROM
 	printf("   Backup_Method: %s\n", Part->Backup_Method_By_Name().c_str());
 	if (Part->Mount_Flags || !Part->Mount_Options.empty())
 		printf("   Mount_Options: %s\n", Part->Mount_Options.c_str());
@@ -1440,6 +1453,67 @@ void TWPartitionManager::Update_System_Details(void) {
 	return;
 }
 
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+//TODO: merge with above code
+void TWPartitionManager::Update_Storage_Sizes()
+{
+	string current_storage_path = DataManager::GetCurrentStoragePath();
+	TWPartition* FreeStorage = Find_Partition_By_Path(current_storage_path);
+	if (FreeStorage != NULL) {
+		// Attempt to mount storage
+		if (!FreeStorage->Mount(false)) {
+			gui_msg(Msg(msg::kError, "unable_to_mount_storage=Unable to mount storage"));
+			DataManager::SetValue(TW_STORAGE_FREE_SIZE, 0);
+		} else {
+			DataManager::SetValue(TW_STORAGE_FREE_SIZE, (int)(FreeStorage->Free / 1048576LLU));
+		}
+	} else {
+		LOGINFO("Unable to find storage partition '%s'.\n", current_storage_path.c_str());
+	}
+/* OLD CODE--
+	string current_storage_path = DataManager::GetCurrentStoragePath();
+	TWPartition* FreeStorage = Find_Partition_By_Path(current_storage_path);
+	if (FreeStorage != NULL) {
+		// Attempt to mount storage
+		if (!FreeStorage->Mount(false)) {
+			// We couldn't mount storage... check to see if we have dual storage
+			int has_dual_storage;
+			DataManager::GetValue(TW_HAS_DUAL_STORAGE, has_dual_storage);
+			if (has_dual_storage == 1) {
+				// We have dual storage, see if we're using the internal storage that should always be present
+				if (current_storage_path == DataManager::GetSettingsStoragePath()) {
+					if (!FreeStorage->Is_Encrypted) {
+						// Not able to use internal, so error!
+						LOGERR("Unable to mount internal storage.\n");
+					}
+					DataManager::SetValue(TW_STORAGE_FREE_SIZE, 0);
+				} else {
+					// We were using external, flip to internal
+					DataManager::SetValue(TW_USE_EXTERNAL_STORAGE, 0);
+					current_storage_path = DataManager::GetCurrentStoragePath();
+					FreeStorage = Find_Partition_By_Path(current_storage_path);
+					if (FreeStorage != NULL) {
+						DataManager::SetValue(TW_STORAGE_FREE_SIZE, (int)(FreeStorage->Free / 1048576LLU));
+					} else {
+						LOGERR("Unable to locate internal storage partition.\n");
+						DataManager::SetValue(TW_STORAGE_FREE_SIZE, 0);
+					}
+				}
+			} else {
+				// No dual storage and unable to mount storage, error!
+				LOGERR("Unable to mount storage.\n");
+				DataManager::SetValue(TW_STORAGE_FREE_SIZE, 0);
+			}
+		} else {
+			DataManager::SetValue(TW_STORAGE_FREE_SIZE, (int)(FreeStorage->Free / 1048576LLU));
+		}
+	} else {
+		LOGINFO("Unable to find storage partition '%s'.\n", current_storage_path.c_str());
+	}
+*/
+}
+#endif //TARGET_RECOVERY_IS_MULTIROM
+
 void TWPartitionManager::Post_Decrypt(const string& Block_Device) {
 	TWPartition* dat = Find_Partition_By_Path("/data");
 	if (dat != NULL) {
@@ -1920,6 +1994,76 @@ void TWPartitionManager::Get_Partition_List(string ListType, std::vector<Partiti
 				Partition_List->push_back(part);
 			}
 		}
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	} else if (ListType == "multirom_storage") {
+		Update_tw_multirom_variables(DataManager::GetStrValue("tw_multirom_install_loc").c_str());
+
+		char free_space[255];
+		string Current_Storage = DataManager::GetStrValue("tw_multirom_storage_path");
+		bool multirom_capable_storage;
+
+		for (iter = Partitions.begin(); iter != Partitions.end(); iter++) {
+			// what partitions are capable of being multirom_capabable_storage?
+			// all :D
+			// * has_data_media -> yes  (internal & adopted storage)
+			// * not on mmcblk0 -> yes  (external sd / ext4 partitions)
+			multirom_capable_storage = false;
+			multirom_capable_storage |= (*iter)->Has_Data_Media != 0;
+			multirom_capable_storage |= ((*iter)->Primary_Block_Device.compare(0, 18, "/dev/block/mmcblk0") != 0)
+										&& ((*iter)->Primary_Block_Device.compare(0, 14, "/dev/block/dm-"));
+
+			if (multirom_capable_storage) {
+				struct PartitionList part;
+				sprintf(free_space, "%llu", (*iter)->Free / 1024 / 1024);
+				part.Display_Name = (*iter)->Storage_Name + " (";
+				part.Display_Name += free_space;
+				part.Display_Name += "MB)";
+				part.Mount_Point = (*iter)->Storage_Path;
+				if ((*iter)->Storage_Path == Current_Storage)
+					part.selected = 1;
+				else
+					part.selected = 0;
+				Partition_List->push_back(part);
+			}
+/* Original MultiROM method from multirom.cpp (keep for reference):
+std::string MultiROM::listInstallLocations()
+{
+	std::string res = INTERNAL_MEM_LOC_TXT"\n";
+	blkid_probe pr;
+	const char *type;
+	struct dirent *dt;
+	char path[64];
+	DIR *d = opendir("/dev/block/");
+	if(!d)
+		return res;
+
+	while((dt = readdir(d)))
+	{
+		if(strncmp(dt->d_name, "mmcblk0", 7) == 0 || strncmp(dt->d_name, "dm-", 3) == 0)
+			continue;
+		snprintf(path, sizeof(path), "/dev/block/%s", dt->d_name);
+
+		pr = blkid_new_probe_from_filename(path);
+		if(!pr)
+			continue;
+
+		blkid_do_safeprobe(pr);
+		if (blkid_probe_lookup_value(pr, "TYPE", &type, NULL) >= 0)
+		{
+			res += "/dev/block/";
+			res += dt->d_name;
+			res += " (";
+			res += type;
+			res += ")\n";
+		}
+		blkid_free_probe(pr);
+	}
+	closedir(d);
+	return res;
+}
+*/
+		}
+#endif //TARGET_RECOVERY_IS_MULTIROM
 	} else if (ListType == "backup") {
 		char backup_size[255];
 		unsigned long long Backup_Size;
@@ -2342,6 +2486,131 @@ bool TWPartitionManager::Flash_Image(string& path, string& filename) {
 	gui_highlight("flash_done=IMAGE FLASH COMPLETED]");
 	return true;
 }
+
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+bool TWPartitionManager::Push_Context()
+{
+	sync();
+
+	for(size_t i = 0; i < Partitions.size(); ++i)
+		if(Partitions[i]->Is_Mounted())
+			LOGINFO("Partition %s is mounted during TWPartitionManager::Push_Context()\n", Partitions[i]->Mount_Point.c_str());
+
+	std::vector<TWPartition*> parts;
+	Partitions.swap(parts);
+
+	Contexts.push_back(parts);
+	return true;
+}
+
+void TWPartitionManager::Copy_And_Push_Context()
+{
+	std::vector<TWPartition*> parts;
+	for(size_t i = 0; i < Partitions.size(); ++i)
+		parts.push_back(new TWPartition(*Partitions[i]));
+
+	Partitions.swap(parts);
+	Contexts.push_back(parts);
+}
+
+bool TWPartitionManager::Pop_Context()
+{
+	if(Contexts.empty())
+		return false;
+
+	sync();
+
+	for(size_t i = 0; i < Partitions.size(); ++i)
+	{
+		if(Partitions[i]->Is_Mounted())
+			LOGINFO("Partition %s is mounted during TWPartitionManager::Pop_Context()\n", Partitions[i]->Mount_Point.c_str());
+		delete Partitions[i];
+	}
+
+	Partitions = Contexts.back();
+	Contexts.pop_back();
+	return true;
+}
+
+TWPartition* TWPartitionManager::Find_Original_Partition_By_Path(string Path) {
+	std::vector<TWPartition*>::iterator iter;
+	string Local_Path = TWFunc::Get_Root_Path(Path);
+
+	std::vector<TWPartition*> *parts = &Partitions;
+	if(!Contexts.empty())
+		parts = &Contexts.front();
+
+	for (iter = parts->begin(); iter != parts->end(); iter++) {
+		if ((*iter)->Mount_Point == Local_Path || (!(*iter)->Symlink_Mount_Point.empty() && (*iter)->Symlink_Mount_Point == Local_Path))
+			return (*iter);
+	}
+	return NULL;
+}
+
+// copy this from multirom.h to avoid include
+#define INTERNAL_MEM_LOC_TXT "Internal memory"
+
+bool TWPartitionManager::Update_tw_multirom_variables(TWPartition* partition) {
+	// Variables
+	// ---------
+	// tw_multirom_install_loc          -> (org) either "Internal memory" or "/dev/block/... (type)" eg
+	//                                                   USB-OTG = "/dev/block/sda1 (vfat)"
+	// tw_multirom_storage_path         -> (new) TWPartition->Storage_Path
+	// tw_multirom_storage_display_name -> (new) TWPartition->Storage_Name
+	// tw_multirom_storage_free_size    -> (new) TWPartition->Free
+	//
+	// in order to minimize code changes and preserve the original multirom code
+	// we'll just keep using all of the above variables
+
+	if (partition == NULL) {
+		//error, now what?
+		DataManager::SetValue("tw_multirom_storage_path", "");
+		DataManager::SetValue("tw_multirom_install_loc", "");
+		DataManager::SetValue("tw_multirom_storage_display_name", "");
+		DataManager::SetValue("tw_multirom_storage_free_size", "");
+		return false;
+	}
+
+	// tw_multirom_storage_path
+	DataManager::SetValue("tw_multirom_storage_path", partition->Storage_Path);
+
+	// tw_multirom_install_loc
+	std::string str;
+	if (partition->Is_Storage && partition->Is_Settings_Storage) {
+		str = INTERNAL_MEM_LOC_TXT;
+	} else {
+		str = partition->Actual_Block_Device + " (" + partition->Current_File_System + ")";
+	}
+	DataManager::SetValue("tw_multirom_install_loc", str);
+
+	// tw_multirom_storage_display_name and tw_multirom_storage_free_size
+	DataManager::SetValue("tw_multirom_storage_display_name", partition->Storage_Name);
+	char free_space[255];
+	sprintf(free_space, "%llu", partition->Free / 1024 / 1024);
+	DataManager::SetValue("tw_multirom_storage_free_size", free_space);
+
+	return true;
+}
+
+bool TWPartitionManager::Update_tw_multirom_variables(std::string loc) {
+	//location given, find the partition then fill
+	TWPartition* partition = NULL;
+
+	if(loc.compare(INTERNAL_MEM_LOC_TXT) == 0) {
+		// set partition to internal
+		partition = TWPartitionManager::Get_Default_Storage_Partition();
+	} else {
+		// find partition from "/dev/block/... (type)" style used by tw_multirom_install_loc
+		for (std::vector<TWPartition*>::iterator iter = Partitions.begin(); iter != Partitions.end(); iter++) {
+			if (loc == ((*iter)->Actual_Block_Device + " (" + (*iter)->Current_File_System + ")")) {
+				partition = (*iter);
+				break;
+			}
+		}
+	}
+	return Update_tw_multirom_variables(partition);
+}
+#endif //TARGET_RECOVERY_IS_MULTIROM
 
 void TWPartitionManager::Translate_Partition(const char* path, const char* resource_name, const char* default_value) {
 	TWPartition* part = PartitionManager.Find_Partition_By_Path(path);

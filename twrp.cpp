@@ -56,7 +56,15 @@ extern "C" {
 #include <selinux/label.h>
 struct selabel_handle *selinux_handle;
 
+<<<<<<< HEAD
 //extern int adb_server_main(int is_daemon, int server_port, int /* reply_fd */);
+=======
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+#include "multirom/multirom.h"
+#endif //TARGET_RECOVERY_IS_MULTIROM
+
+extern int adb_server_main(int is_daemon, int server_port, int /* reply_fd */);
+>>>>>>> 75afc10ec039674d453ed8790d9b5459227fdb93
 
 TWPartitionManager PartitionManager;
 int Log_Offset;
@@ -109,6 +117,27 @@ int main(int argc, char **argv) {
 	time_t StartupTime = time(NULL);
 	printf("Starting TWRP %s-%s on %s (pid %d)\n", TW_VERSION_STR, TW_GIT_REVISION, ctime(&StartupTime), getpid());
 
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	printf("Setting SELinux to permissive\n");
+	TWFunc::write_file("/sys/fs/selinux/enforce", "0");
+
+	// TODO: file_contexts.bin
+	TWFunc::write_file("/file_contexts",
+        "\n\n# MultiROM folders\n"
+        "/data/media/multirom(/.*)?          <<none>>\n"
+        "/data/media/0/multirom(/.*)?        <<none>>\n"
+        "/realdata/media/multirom(/.*)?      <<none>>\n"
+        "/realdata/media/0/multirom(/.*)?    <<none>>\n"
+        "/sdcard/multirom(/.*)?              <<none>>\n"
+        "/mnt/mrom(/.*)?                     <<none>>\n",
+        "ae");
+
+	// MultiROM _might_ have crashed the recovery while the boot device was redirected.
+	// It would be bad to let that as is.
+	MultiROM::failsafeCheckPartition("/tmp/mrom_fakebootpart");
+	MultiROM::failsafeCheckPartition("/tmp/mrom_fakesyspart");
+#endif //TARGET_RECOVERY_IS_MULTIROM
+
 	// Load default values to set DataManager constants and handle ifdefs
 	DataManager::SetDefaultValues();
 	printf("Starting the UI...\n");
@@ -129,6 +158,17 @@ int main(int argc, char **argv) {
 		return -1;
 	}
 	PartitionManager.Output_Partition_Logging();
+
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+	DataManager::SetValue(TW_MROM_REC_VERSION_VAR, MultiROM::getRecoveryVersion());
+	printf("MultiROM Recovery version: %s\n", DataManager::GetStrValue(TW_MROM_REC_VERSION_VAR).c_str());
+
+#ifdef MR_NO_KEXEC
+	MultiROM::nokexec_restore_primary_and_cleanup();
+#endif
+
+#endif //TARGET_RECOVERY_IS_MULTIROM
+
 	// Load up all the resources
 	gui_loadResources();
 
@@ -289,19 +329,42 @@ int main(int argc, char **argv) {
 		}
 	}
 
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+#ifdef MR_NO_KEXEC
+	// if /data in encrypted, the previous call would have done nothing, so check after decryption again
+	MultiROM::nokexec_restore_primary_and_cleanup();
+#endif
+#endif //TARGET_RECOVERY_IS_MULTIROM
+
 	// Read the settings file
 	DataManager::ReadSettingsFile();
 	PageManager::LoadLanguage(DataManager::GetStrValue("tw_language"));
 	GUIConsole::Translate_Now();
+
+#ifdef TARGET_RECOVERY_IS_MULTIROM
+    //TODO: we're not using this atm, should we?
+    ////gui_rotate(DataManager::GetIntValue(TW_ROTATION));
+#endif //TARGET_RECOVERY_IS_MULTIROM
 
 	// Fixup the RTC clock on devices which require it
 	if (crash_counter == 0)
 		TWFunc::Fixup_Time_On_Boot();
 
 	// Run any outstanding OpenRecoveryScript
+#ifndef TARGET_RECOVERY_IS_MULTIROM
 	if (DataManager::GetIntValue(TW_IS_ENCRYPTED) == 0 && (TWFunc::Path_Exists(SCRIPT_FILE_TMP) || TWFunc::Path_Exists(SCRIPT_FILE_CACHE))) {
 		OpenRecoveryScript::Run_OpenRecoveryScript();
 	}
+#else
+	if (DataManager::GetIntValue(TW_IS_ENCRYPTED) == 0)
+	{
+		if ((TWFunc::Path_Exists(SCRIPT_FILE_TMP) || TWFunc::Path_Exists(SCRIPT_FILE_CACHE)))
+			OpenRecoveryScript::Run_OpenRecoveryScript();
+		else
+			MultiROM::executeCacheScripts();
+	}
+    //TODO: possibly cleanup the code, instead of having duplicates
+#endif //TARGET_RECOVERY_IS_MULTIROM
 
 #ifdef TW_HAS_MTP
 	char mtp_crash_check[PROPERTY_VALUE_MAX];

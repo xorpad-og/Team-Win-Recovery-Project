@@ -581,6 +581,7 @@ Value* PackageExtractDirFn(const char* name, State* state,
   return StringValue(success ? "t" : "");
 }
 
+<<<<<<< HEAD
 // package_extract_file(package_file[, dest_file])
 //   Extracts a single package_file from the update package and writes it to dest_file,
 //   overwriting existing files if necessary. Without the dest_file argument, returns the
@@ -591,6 +592,231 @@ Value* PackageExtractFileFn(const char* name, State* state,
     return ErrorAbort(state, kArgsParsingFailure, "%s() expects 1 or 2 args, got %zu", name,
                       argv.size());
   }
+=======
+
+Value* SetPermFn(const char* name, State* state, int argc, Expr* argv[]) {
+    char* result = NULL;
+    bool recursive = (strcmp(name, "set_perm_recursive") == 0);
+
+    int min_args = 4 + (recursive ? 1 : 0);
+    if (argc < min_args) {
+        return ErrorAbort(state, "%s() expects %d+ args, got %d",
+                          name, min_args, argc);
+    }
+
+    char** args = ReadVarArgs(state, argc, argv);
+    if (args == NULL) return NULL;
+
+    char* end;
+    int i;
+    int bad = 0;
+
+    int uid = strtoul(args[0], &end, 0);
+    if (*end != '\0' || args[0][0] == 0) {
+        ErrorAbort(state, "%s: \"%s\" not a valid uid", name, args[0]);
+        goto done;
+    }
+
+    int gid = strtoul(args[1], &end, 0);
+    if (*end != '\0' || args[1][0] == 0) {
+        ErrorAbort(state, "%s: \"%s\" not a valid gid", name, args[1]);
+        goto done;
+    }
+
+    if (recursive) {
+        int dir_mode = strtoul(args[2], &end, 0);
+        if (*end != '\0' || args[2][0] == 0) {
+            ErrorAbort(state, "%s: \"%s\" not a valid dirmode", name, args[2]);
+            goto done;
+        }
+
+        int file_mode = strtoul(args[3], &end, 0);
+        if (*end != '\0' || args[3][0] == 0) {
+            ErrorAbort(state, "%s: \"%s\" not a valid filemode",
+                       name, args[3]);
+            goto done;
+        }
+
+        for (i = 4; i < argc; ++i) {
+            dirSetHierarchyPermissions(args[i], uid, gid, dir_mode, file_mode);
+        }
+    } else {
+        int mode = strtoul(args[2], &end, 0);
+        if (*end != '\0' || args[2][0] == 0) {
+            ErrorAbort(state, "%s: \"%s\" not a valid mode", name, args[2]);
+            goto done;
+        }
+
+        for (i = 3; i < argc; ++i) {
+            if (chown(args[i], uid, gid) < 0) {
+                printf("%s: chown of %s to %d %d failed: %s\n",
+                        name, args[i], uid, gid, strerror(errno));
+                ++bad;
+            }
+            if (chmod(args[i], mode) < 0) {
+                printf("%s: chmod of %s to %o failed: %s\n",
+                        name, args[i], mode, strerror(errno));
+                ++bad;
+            }
+        }
+    }
+    result = strdup("");
+
+done:
+    for (i = 0; i < argc; ++i) {
+        free(args[i]);
+    }
+    free(args);
+
+    if (bad) {
+        free(result);
+        return ErrorAbort(state, "%s: some changes failed", name);
+    }
+    return StringValue(result);
+}
+
+struct perm_parsed_args {
+    bool has_uid;
+    uid_t uid;
+    bool has_gid;
+    gid_t gid;
+    bool has_mode;
+    mode_t mode;
+    bool has_fmode;
+    mode_t fmode;
+    bool has_dmode;
+    mode_t dmode;
+    bool has_selabel;
+    char* selabel;
+    bool has_capabilities;
+    uint64_t capabilities;
+};
+
+static struct perm_parsed_args ParsePermArgs(State * state, int argc, char** args) {
+    int i;
+    struct perm_parsed_args parsed;
+    int bad = 0;
+    static int max_warnings = 20;
+
+    memset(&parsed, 0, sizeof(parsed));
+
+    for (i = 1; i < argc; i += 2) {
+        if (strcmp("uid", args[i]) == 0) {
+            int64_t uid;
+            if (sscanf(args[i+1], "%" SCNd64, &uid) == 1) {
+                parsed.uid = uid;
+                parsed.has_uid = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid UID \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("gid", args[i]) == 0) {
+            int64_t gid;
+            if (sscanf(args[i+1], "%" SCNd64, &gid) == 1) {
+                parsed.gid = gid;
+                parsed.has_gid = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid GID \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("mode", args[i]) == 0) {
+            int32_t mode;
+            if (sscanf(args[i+1], "%" SCNi32, &mode) == 1) {
+                parsed.mode = mode;
+                parsed.has_mode = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid mode \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("dmode", args[i]) == 0) {
+            int32_t mode;
+            if (sscanf(args[i+1], "%" SCNi32, &mode) == 1) {
+                parsed.dmode = mode;
+                parsed.has_dmode = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid dmode \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("fmode", args[i]) == 0) {
+            int32_t mode;
+            if (sscanf(args[i+1], "%" SCNi32, &mode) == 1) {
+                parsed.fmode = mode;
+                parsed.has_fmode = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid fmode \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("capabilities", args[i]) == 0) {
+            int64_t capabilities;
+            if (sscanf(args[i+1], "%" SCNi64, &capabilities) == 1) {
+                parsed.capabilities = capabilities;
+                parsed.has_capabilities = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid capabilities \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (strcmp("selabel", args[i]) == 0) {
+            if (args[i+1][0] != '\0') {
+                parsed.selabel = args[i+1];
+                parsed.has_selabel = true;
+            } else {
+                uiPrintf(state, "ParsePermArgs: invalid selabel \"%s\"\n", args[i + 1]);
+                bad++;
+            }
+            continue;
+        }
+        if (max_warnings != 0) {
+            printf("ParsedPermArgs: unknown key \"%s\", ignoring\n", args[i]);
+            max_warnings--;
+            if (max_warnings == 0) {
+                printf("ParsedPermArgs: suppressing further warnings\n");
+            }
+        }
+    }
+    return parsed;
+}
+
+static int ApplyParsedPerms(
+        State * state,
+        const char* filename,
+        const struct stat *statptr,
+        struct perm_parsed_args parsed)
+{
+    int bad = 0;
+
+    if (parsed.has_selabel) {
+        if (lsetfilecon(filename, parsed.selabel) != 0) {
+            uiPrintf(state, "ApplyParsedPerms: lsetfilecon of %s to %s failed: %s\n",
+                    filename, parsed.selabel, strerror(errno));
+            bad++;
+        }
+    }
+
+    /* ignore symlinks */
+    if (S_ISLNK(statptr->st_mode)) {
+        return bad;
+    }
+
+    if (parsed.has_uid) {
+        if (chown(filename, parsed.uid, -1) < 0) {
+            uiPrintf(state, "ApplyParsedPerms: chown of %s to %d failed: %s\n",
+                    filename, parsed.uid, strerror(errno));
+            bad++;
+        }
+    }
+>>>>>>> 75afc10ec039674d453ed8790d9b5459227fdb93
 
   if (argv.size() == 2) {
     // The two-argument version extracts to a file.
@@ -1321,6 +1547,78 @@ void RegisterInstallFunctions() {
   RegisterFunction("get_stage", GetStageFn);
   RegisterFunction("set_stage", SetStageFn);
 
+<<<<<<< HEAD
   RegisterFunction("enable_reboot", EnableRebootFn);
   RegisterFunction("tune2fs", Tune2FsFn);
+=======
+    free(args2[0]);
+    free(args2);
+    if (result != 0) {
+        return ErrorAbort(state, kTune2FsFailure, "%s() returned error code %d",
+                          name, result);
+    }
+    return StringValue(strdup("t"));
+#else
+    return ErrorAbort(state, "%s() support not present, no libtune2fs", name);
+#endif // HAVE_LIBTUNE2FS
+}
+
+void RegisterInstallFunctions() {
+    RegisterFunction("mount", MountFn);
+    RegisterFunction("is_mounted", IsMountedFn);
+    RegisterFunction("unmount", UnmountFn);
+    RegisterFunction("format", FormatFn);
+    RegisterFunction("show_progress", ShowProgressFn);
+    RegisterFunction("set_progress", SetProgressFn);
+    RegisterFunction("delete", DeleteFn);
+    RegisterFunction("delete_recursive", DeleteFn);
+    RegisterFunction("package_extract_dir", PackageExtractDirFn);
+    RegisterFunction("package_extract_file", PackageExtractFileFn);
+    RegisterFunction("symlink", SymlinkFn);
+
+    // Maybe, at some future point, we can delete these functions? They have been
+    // replaced by perm_set and perm_set_recursive.
+    RegisterFunction("set_perm", SetPermFn);
+    RegisterFunction("set_perm_recursive", SetPermFn);
+
+    // Usage:
+    //   set_metadata("filename", "key1", "value1", "key2", "value2", ...)
+    // Example:
+    //   set_metadata("/system/bin/netcfg", "uid", 0, "gid", 3003, "mode", 02750, "selabel", "u:object_r:system_file:s0", "capabilities", 0x0);
+    RegisterFunction("set_metadata", SetMetadataFn);
+
+    // Usage:
+    //   set_metadata_recursive("dirname", "key1", "value1", "key2", "value2", ...)
+    // Example:
+    //   set_metadata_recursive("/system", "uid", 0, "gid", 0, "fmode", 0644, "dmode", 0755, "selabel", "u:object_r:system_file:s0", "capabilities", 0x0);
+    RegisterFunction("set_metadata_recursive", SetMetadataFn);
+
+    RegisterFunction("getprop", GetPropFn);
+    RegisterFunction("file_getprop", FileGetPropFn);
+    RegisterFunction("write_raw_image", WriteRawImageFn);
+
+    RegisterFunction("apply_patch", ApplyPatchFn);
+    RegisterFunction("apply_patch_check", ApplyPatchCheckFn);
+    RegisterFunction("apply_patch_space", ApplyPatchSpaceFn);
+
+    RegisterFunction("wipe_block_device", WipeBlockDeviceFn);
+
+    RegisterFunction("read_file", ReadFileFn);
+    RegisterFunction("sha1_check", Sha1CheckFn);
+    RegisterFunction("rename", RenameFn);
+    RegisterFunction("write_value", WriteValueFn);
+
+    RegisterFunction("wipe_cache", WipeCacheFn);
+
+    RegisterFunction("ui_print", UIPrintFn);
+
+    RegisterFunction("run_program", RunProgramFn);
+
+    RegisterFunction("reboot_now", RebootNowFn);
+    RegisterFunction("get_stage", GetStageFn);
+    RegisterFunction("set_stage", SetStageFn);
+
+    RegisterFunction("enable_reboot", EnableRebootFn);
+    RegisterFunction("tune2fs", Tune2FsFn);
+>>>>>>> 75afc10ec039674d453ed8790d9b5459227fdb93
 }
