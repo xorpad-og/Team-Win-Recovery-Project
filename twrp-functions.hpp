@@ -51,9 +51,9 @@ struct selabel_handle;
 class TWFunc
 {
 public:
-	static string Get_Root_Path(string Path);                                   // Trims any trailing folders or filenames from the path, also adds a leading / if not present
-	static string Get_Path(string Path);                                        // Trims everything after the last / in the string
-	static string Get_Filename(string Path);                                    // Trims the path off of a filename
+	static string Get_Root_Path(const string& Path);                            // Trims any trailing folders or filenames from the path, also adds a leading / if not present
+	static string Get_Path(const string& Path);                                 // Trims everything after the last / in the string
+	static string Get_Filename(const string& Path);                             // Trims the path off of a filename
 
 	static int Exec_Cmd(const string& cmd, string &result);                     //execute a command and return the result as a string by reference
 	static int Exec_Cmd(const string& cmd);                                     //execute a command
@@ -89,11 +89,15 @@ public:
 	static int read_file(string fn, vector<string>& results); //read from file
 	static int read_file(string fn, string& results); //read from file
 	static int read_file(string fn, uint64_t& results); //read from file
+<<<<<<< HEAD
 	static int write_file(string fn, string& line); //write from file
 #ifdef TARGET_RECOVERY_IS_MULTIROM
 	static int write_file(string fn, const string& line); //write from file
 	static int write_file(string fn, const string& line, const char *mode); //write from file
 #endif //TARGET_RECOVERY_IS_MULTIROM
+=======
+	static int write_to_file(const string& fn, const string& line);             //write to file
+>>>>>>> 41a5f72b02810b01c05e431305d137f98e53d891
 	static bool Install_SuperSU(void); // Installs su binary and apk and sets proper permissions
 	static bool Try_Decrypting_Backup(string Restore_Path, string Password); // true for success, false for failed to decrypt
 	static string System_Property_Get(string Prop_Name);                // Returns value of Prop_Name from reading /system/build.prop
@@ -120,6 +124,8 @@ public:
 #endif //TARGET_RECOVERY_IS_MULTIROM
 	static unsigned long long IOCTL_Get_Block_Size(const char* block_device);
 	static void copy_kernel_log(string curr_storage); // Copy Kernel Log to Current Storage (PSTORE/KMSG)
+	static bool isNumber(string strtocheck); // return true if number, false if not a number
+	static int stream_adb_backup(string &Restore_Name); // Tell ADB Backup to Stream to TWRP from GUI selection
 
 private:
 	static void Copy_Log(string Source, string Destination);
