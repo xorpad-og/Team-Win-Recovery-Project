@@ -14,61 +14,223 @@
 
 LOCAL_PATH := $(call my-dir)
 
+ifdef project-path-for
+    RECOVERY_PATH := $(call project-path-for,recovery)
+else
+    RECOVERY_PATH := bootable/recovery
+endif
+
 include $(CLEAR_VARS)
+
+BOARD_RECOVERY_DEFINES := BOARD_BML_BOOT BOARD_BML_RECOVERY
+
+$(foreach board_define,$(BOARD_RECOVERY_DEFINES), \
+  $(if $($(board_define)), \
+    $(eval LOCAL_CFLAGS += -D$(board_define)=\"$($(board_define))\") \
+  ) \
+  )
+
+LOCAL_C_INCLUDES += \
+    $(LOCAL_PATH)/include \
+    external/bzip2 \
+    external/zlib \
+    $(commands_recovery_local_path)
 
 LOCAL_CLANG := true
 LOCAL_SRC_FILES := applypatch.cpp bspatch.cpp freecache.cpp imgpatch.cpp utils.cpp
 LOCAL_MODULE := libapplypatch
 LOCAL_MODULE_TAGS := eng
+<<<<<<< HEAD
 LOCAL_C_INCLUDES += $(call project-path-for,recovery)
+=======
+LOCAL_C_INCLUDES += $(RECOVERY_PATH)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_STATIC_LIBRARIES += libbase libotafault libmtdutils libcrypto_static libbz libz
 
+# libapplypatch (static library)
+# ===============================
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := \
+    applypatch.cpp \
+    bspatch.cpp \
+    freecache.cpp \
+    imgpatch.cpp
+LOCAL_MODULE := libapplypatch
+LOCAL_MODULE_TAGS := eng
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
+LOCAL_C_INCLUDES := \
+    $(LOCAL_PATH)/include \
+    $(commands_recovery_local_path)
+LOCAL_STATIC_LIBRARIES := \
+    libotafault \
+    libbase \
+    libcrypto \
+    libbspatch \
+    libbz \
+    libz
+LOCAL_WHOLE_STATIC_LIBRARIES += libmtdutils
+LOCAL_CFLAGS := \
+    -DZLIB_CONST \
+    -Werror
 include $(BUILD_STATIC_LIBRARY)
 
+# libimgpatch (static library)
+# ===============================
 include $(CLEAR_VARS)
 
-LOCAL_CLANG := true
-LOCAL_SRC_FILES := bspatch.cpp imgpatch.cpp utils.cpp
+LOCAL_SRC_FILES := \
+    bspatch.cpp \
+    imgpatch.cpp
 LOCAL_MODULE := libimgpatch
+<<<<<<< HEAD
 LOCAL_C_INCLUDES += $(call project-path-for,recovery)
+=======
+LOCAL_C_INCLUDES := \
+    $(LOCAL_PATH)/include \
+    $(commands_recovery_local_path)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
-LOCAL_STATIC_LIBRARIES += libcrypto_static libbz libz
-
+LOCAL_STATIC_LIBRARIES := \
+    libcrypto \
+    libbspatch \
+    libbase \
+    libbz \
+    libz
+LOCAL_CFLAGS := \
+    -DZLIB_CONST \
+    -Werror
 include $(BUILD_STATIC_LIBRARY)
 
-ifeq ($(HOST_OS),linux)
+# libimgpatch (host static library)
+# ===============================
 include $(CLEAR_VARS)
-
-LOCAL_CLANG := true
-LOCAL_SRC_FILES := bspatch.cpp imgpatch.cpp utils.cpp
+LOCAL_SRC_FILES := \
+    bspatch.cpp \
+    imgpatch.cpp
 LOCAL_MODULE := libimgpatch
+<<<<<<< HEAD
 LOCAL_C_INCLUDES += $(call project-path-for,recovery)
+=======
+LOCAL_C_INCLUDES += $(RECOVERY_PATH)
+LOCAL_MODULE_HOST_OS := linux
+LOCAL_C_INCLUDES := \
+    $(LOCAL_PATH)/include \
+    $(commands_recovery_local_path)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
-LOCAL_STATIC_LIBRARIES += libcrypto_static libbz libz
-
+LOCAL_STATIC_LIBRARIES := \
+    libcrypto \
+    libbspatch \
+    libbase \
+    libbz \
+    libz
+LOCAL_CFLAGS := \
+    -DZLIB_CONST \
+    -Werror
 include $(BUILD_HOST_STATIC_LIBRARY)
-endif  # HOST_OS == linux
 
+# libapplypatch_modes (static library)
+# ===============================
 include $(CLEAR_VARS)
+LOCAL_SRC_FILES := \
+    applypatch_modes.cpp
+LOCAL_MODULE := libapplypatch_modes
+LOCAL_C_INCLUDES := $(commands_recovery_local_path)
+LOCAL_STATIC_LIBRARIES := \
+    libapplypatch \
+    libbase \
+    libedify \
+    libcrypto
+LOCAL_CFLAGS := -Werror
+include $(BUILD_STATIC_LIBRARY)
 
-LOCAL_CLANG := true
-LOCAL_SRC_FILES := main.cpp
+# applypatch (target executable)
+# ===============================
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := applypatch_main.cpp
 LOCAL_MODULE := applypatch
+<<<<<<< HEAD
 LOCAL_C_INCLUDES += $(call project-path-for,recovery)
+=======
+LOCAL_C_INCLUDES += $(RECOVERY_PATH)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_STATIC_LIBRARIES += libapplypatch libbase libotafault libmtdutils libcrypto_static libbz \
                           libedify \
 
 LOCAL_SHARED_LIBRARIES += libz libcutils libc
 
+LOCAL_C_INCLUDES := $(commands_recovery_local_path)
+LOCAL_STATIC_LIBRARIES := \
+    libapplypatch_modes \
+    libapplypatch \
+    libbase \
+    libedify \
+    libotafault \
+    libcrypto \
+    libbspatch \
+    libbz
+LOCAL_SHARED_LIBRARIES := \
+    libbase \
+    libz \
+    libcutils
+LOCAL_CFLAGS := -Werror
 include $(BUILD_EXECUTABLE)
 
+libimgdiff_src_files := imgdiff.cpp
+
+# libbsdiff is compiled with -D_FILE_OFFSET_BITS=64.
+libimgdiff_cflags := \
+    -Werror \
+    -D_FILE_OFFSET_BITS=64
+
+libimgdiff_static_libraries := \
+    libbsdiff \
+    libdivsufsort \
+    libdivsufsort64 \
+    libziparchive \
+    libutils \
+    liblog \
+    libbase \
+    libz
+
+# libimgdiff (static library)
+# ===============================
 include $(CLEAR_VARS)
+LOCAL_SRC_FILES := \
+    $(libimgdiff_src_files)
+LOCAL_MODULE := libimgdiff
+LOCAL_CFLAGS := \
+    $(libimgdiff_cflags)
+LOCAL_STATIC_LIBRARIES := \
+    $(libimgdiff_static_libraries)
+LOCAL_C_INCLUDES := \
+    $(LOCAL_PATH)/include
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
+include $(BUILD_STATIC_LIBRARY)
 
-LOCAL_CLANG := true
-LOCAL_SRC_FILES := imgdiff.cpp utils.cpp bsdiff.cpp
+# libimgdiff (host static library)
+# ===============================
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := \
+    $(libimgdiff_src_files)
+LOCAL_MODULE := libimgdiff
+LOCAL_CFLAGS := \
+    $(libimgdiff_cflags)
+LOCAL_STATIC_LIBRARIES := \
+    $(libimgdiff_static_libraries)
+LOCAL_C_INCLUDES := \
+    $(LOCAL_PATH)/include
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
+include $(BUILD_HOST_STATIC_LIBRARY)
+
+# imgdiff (host static executable)
+# ===============================
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := imgdiff_main.cpp
 LOCAL_MODULE := imgdiff
-LOCAL_FORCE_STATIC_EXECUTABLE := true
-LOCAL_C_INCLUDES += external/zlib external/bzip2
-LOCAL_STATIC_LIBRARIES += libz libbz
-
+LOCAL_CFLAGS := -Werror
+LOCAL_STATIC_LIBRARIES := \
+    libimgdiff \
+    $(libimgdiff_static_libraries) \
+    libbz
 include $(BUILD_HOST_EXECUTABLE)

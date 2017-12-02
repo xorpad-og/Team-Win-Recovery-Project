@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "roots.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/mount.h>
@@ -25,13 +27,13 @@
 #include <fcntl.h>
 #include <dirent.h>
 
+#include <android-base/logging.h>
+#include <ext4_utils/make_ext4fs.h>
+#include <ext4_utils/wipe.h>
 #include <fs_mgr.h>
-#include "mtdutils/mtdutils.h"
-#include "mtdutils/mounts.h"
-#include "roots.h"
+
 #include "common.h"
-#include "make_ext4fs.h"
-#include "wipe.h"
+#include "mounts.h"
 #include "cryptfs.h"
 
 #include "voldclient.h"
@@ -86,15 +88,15 @@ void load_volume_table()
     int i;
     int ret;
 
-    fstab = fs_mgr_read_fstab("/etc/recovery.fstab");
+    fstab = fs_mgr_read_fstab_default();
     if (!fstab) {
-        LOGE("failed to read /etc/recovery.fstab\n");
+        LOG(ERROR) << "failed to read default fstab";
         return;
     }
 
     ret = fs_mgr_add_entry(fstab, "/tmp", "ramdisk", "ramdisk");
     if (ret < 0 ) {
-        LOGE("failed to add /tmp entry to fstab\n");
+        LOG(ERROR) << "failed to add /tmp entry to fstab";
         fs_mgr_free_fstab(fstab);
         fstab = NULL;
         return;
@@ -180,7 +182,7 @@ Volume* volume_for_label(const char* label) {
 int ensure_path_mounted_at(const char* path, const char* mount_point, bool force_rw) {
     Volume* v = volume_for_path(path);
     if (v == NULL) {
-        LOGE("unknown volume for path [%s]\n", path);
+        LOG(ERROR) << "unknown volume for path [" << path << "]";
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
@@ -188,10 +190,8 @@ int ensure_path_mounted_at(const char* path, const char* mount_point, bool force
         return 0;
     }
 
-    int result;
-    result = scan_mounted_volumes();
-    if (result < 0) {
-        LOGE("failed to scan mounted volumes\n");
+    if (!scan_mounted_volumes()) {
+        LOG(ERROR) << "failed to scan mounted volumes";
         return -1;
     }
 
@@ -199,6 +199,7 @@ int ensure_path_mounted_at(const char* path, const char* mount_point, bool force
         mount_point = v->mount_point;
     }
 
+<<<<<<< HEAD
     if (!fs_mgr_is_voldmanaged(v)) {
         const MountedVolume* mv =
             find_mounted_volume_by_mount_point(mount_point);
@@ -206,10 +207,17 @@ int ensure_path_mounted_at(const char* path, const char* mount_point, bool force
             // volume is already mounted
             return 0;
         }
+=======
+    MountedVolume* mv = find_mounted_volume_by_mount_point(mount_point);
+    if (mv) {
+        // volume is already mounted
+        return 0;
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
     }
 
     mkdir_p(mount_point, 0755);  // in case it doesn't already exist
 
+<<<<<<< HEAD
     if (strcmp(v->fs_type, "yaffs2") == 0) {
         // mount an MTD partition as a YAFFS2 filesystem.
         mtd_scan_partitions();
@@ -234,12 +242,32 @@ int ensure_path_mounted_at(const char* path, const char* mount_point, bool force
         result = mount(v->blk_device, mount_point, v->fs_type,
                        mntflags, v->fs_options);
         if (result == 0) return 0;
+=======
+    if (strcmp(v->fs_type, "ext4") == 0 ||
+               strcmp(v->fs_type, "squashfs") == 0 ||
+               strcmp(v->fs_type, "vfat") == 0) {
+        int result = mount(v->blk_device, mount_point, v->fs_type, v->flags, v->fs_options);
+        if (result == -1 && fs_mgr_is_formattable(v)) {
+            LOG(ERROR) << "failed to mount " << mount_point << " (" << strerror(errno)
+                       << ") , formatting.....";
+            bool crypt_footer = fs_mgr_is_encryptable(v) && !strcmp(v->key_loc, "footer");
+            if (fs_mgr_do_format(v, crypt_footer) == 0) {
+                result = mount(v->blk_device, mount_point, v->fs_type, v->flags, v->fs_options);
+            } else {
+                PLOG(ERROR) << "failed to format " << mount_point;
+                return -1;
+            }
+        }
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 
-        LOGE("failed to mount %s (%s)\n", mount_point, strerror(errno));
-        return -1;
+        if (result == -1) {
+            PLOG(ERROR) << "failed to mount " << mount_point;
+            return -1;
+        }
+        return 0;
     }
 
-    LOGE("unknown fs_type \"%s\" for %s\n", v->fs_type, mount_point);
+    LOG(ERROR) << "unknown fs_type \"" << v->fs_type << "\" for " << mount_point;
     return -1;
 }
 
@@ -302,7 +330,7 @@ int ensure_path_unmounted(const char* path, bool detach /* = false */) {
         v = volume_for_path(path);
     }
     if (v == NULL) {
-        LOGE("unknown volume for path [%s]\n", path);
+        LOG(ERROR) << "unknown volume for path [" << path << "]";
         return -1;
     }
     return ensure_volume_unmounted(v, detach);
@@ -318,15 +346,12 @@ int ensure_volume_unmounted(Volume* v, bool detach /* = false */) {
         return -1;
     }
 
-    int result;
-    result = scan_mounted_volumes();
-    if (result < 0) {
-        LOGE("failed to scan mounted volumes\n");
+    if (!scan_mounted_volumes()) {
+        LOG(ERROR) << "failed to scan mounted volumes";
         return -1;
     }
 
-    const MountedVolume* mv =
-        find_mounted_volume_by_mount_point(v->mount_point);
+    MountedVolume* mv = find_mounted_volume_by_mount_point(v->mount_point);
     if (mv == NULL) {
         // volume is already unmounted
         return 0;
@@ -347,11 +372,11 @@ static int exec_cmd(const char* path, char* const argv[]) {
     pid_t child;
     if ((child = vfork()) == 0) {
         execv(path, argv);
-        _exit(-1);
+        _exit(EXIT_FAILURE);
     }
     waitpid(child, &status, 0);
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-        LOGE("%s failed with status %d\n", path, WEXITSTATUS(status));
+        LOG(ERROR) << path << " failed with status " << WEXITSTATUS(status);
     }
     return WEXITSTATUS(status);
 }
@@ -413,16 +438,16 @@ int format_volume(const char* volume, const char* directory, bool force) {
 
     Volume* v = volume_for_path(volume);
     if (v == NULL) {
-        LOGE("unknown volume \"%s\"\n", volume);
+        LOG(ERROR) << "unknown volume \"" << volume << "\"";
         return -1;
     }
     if (strcmp(v->fs_type, "ramdisk") == 0) {
         // you can't format the ramdisk.
-        LOGE("can't format_volume \"%s\"", volume);
+        LOG(ERROR) << "can't format_volume \"" << volume << "\"";
         return -1;
     }
     if (strcmp(v->mount_point, volume) != 0) {
-        LOGE("can't give path \"%s\" to format_volume\n", volume);
+        LOG(ERROR) << "can't give path \"" << volume << "\" to format_volume";
         return -1;
     }
 
@@ -463,10 +488,11 @@ int format_volume(const char* volume, const char* directory, bool force) {
     }
 
     if (ensure_path_unmounted(volume) != 0) {
-        LOGE("format_volume failed to unmount \"%s\"\n", v->mount_point);
+        LOG(ERROR) << "format_volume failed to unmount \"" << v->mount_point << "\"";
         return -1;
     }
 
+<<<<<<< HEAD
     if (fs_mgr_is_voldmanaged(v)) {
         LOGE("can't format vold volume \"%s\"", volume);
         return -1;
@@ -495,14 +521,16 @@ int format_volume(const char* volume, const char* directory, bool force) {
         return 0;
     }
 
+=======
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
     if (strcmp(v->fs_type, "ext4") == 0 || strcmp(v->fs_type, "f2fs") == 0) {
         // if there's a key_loc that looks like a path, it should be a
         // block device for storing encryption metadata.  wipe it too.
         if (v->key_loc != NULL && v->key_loc[0] == '/') {
-            LOGI("wiping %s\n", v->key_loc);
+            LOG(INFO) << "wiping " << v->key_loc;
             int fd = open(v->key_loc, O_WRONLY | O_CREAT, 0644);
             if (fd < 0) {
-                LOGE("format_volume: failed to open %s\n", v->key_loc);
+                LOG(ERROR) << "format_volume: failed to open " << v->key_loc;
                 return -1;
             }
             wipe_block_device(fd, get_file_size(fd));
@@ -517,8 +545,14 @@ int format_volume(const char* volume, const char* directory, bool force) {
         }
         int result;
         if (strcmp(v->fs_type, "ext4") == 0) {
-            result = make_ext4fs_directory(v->blk_device, length, volume, sehandle, directory);
+            if (v->erase_blk_size != 0 && v->logical_blk_size != 0) {
+                result = make_ext4fs_directory_align(v->blk_device, length, volume, sehandle,
+                        directory, v->erase_blk_size, v->logical_blk_size);
+            } else {
+                result = make_ext4fs_directory(v->blk_device, length, volume, sehandle, directory);
+            }
         } else {   /* Has to be f2fs because we checked earlier. */
+<<<<<<< HEAD
             char bytes_reserved[20], num_sectors[20];
             const char* f2fs_argv[6] = {"mkfs.f2fs", "-t1"};
             if (length < 0) {
@@ -533,19 +567,36 @@ int format_volume(const char* volume, const char* directory, bool force) {
                 f2fs_argv[2] = v->blk_device;
                 f2fs_argv[3] = num_sectors;
                 f2fs_argv[4] = NULL;
+=======
+            if (v->key_loc != NULL && strcmp(v->key_loc, "footer") == 0 && length < 0) {
+                LOG(ERROR) << "format_volume: crypt footer + negative length (" << length
+                           << ") not supported on " << v->fs_type;
+                return -1;
+            }
+            if (length < 0) {
+                LOG(ERROR) << "format_volume: negative length (" << length
+                           << ") not supported on " << v->fs_type;
+                return -1;
+            }
+            char *num_sectors;
+            if (asprintf(&num_sectors, "%zd", length / 512) <= 0) {
+                LOG(ERROR) << "format_volume: failed to create " << v->fs_type
+                           << " command for " << v->blk_device;
+                return -1;
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
             }
             const char *f2fs_path = "/sbin/mkfs.f2fs";
 
             result = exec_cmd(f2fs_path, (char* const*)f2fs_argv);
         }
         if (result != 0) {
-            LOGE("format_volume: make %s failed on %s with %d(%s)\n", v->fs_type, v->blk_device, result, strerror(errno));
+            PLOG(ERROR) << "format_volume: make " << v->fs_type << " failed on " << v->blk_device;
             return -1;
         }
         return 0;
     }
 
-    LOGE("format_volume: fs_type \"%s\" unsupported\n", v->fs_type);
+    LOG(ERROR) << "format_volume: fs_type \"" << v->fs_type << "\" unsupported";
     return -1;
 }
 
@@ -555,7 +606,7 @@ int format_volume(const char* volume, bool force) {
 
 int setup_install_mounts() {
     if (fstab == NULL) {
-        LOGE("can't set up install mounts: no fstab loaded\n");
+        LOG(ERROR) << "can't set up install mounts: no fstab loaded";
         return -1;
     }
     for (int i = 0; i < fstab->num_entries; ++i) {
@@ -564,11 +615,12 @@ int setup_install_mounts() {
         if (strcmp(v->mount_point, "/tmp") == 0 ||
             strcmp(v->mount_point, "/cache") == 0) {
             if (ensure_path_mounted(v->mount_point) != 0) {
-                LOGE("failed to mount %s\n", v->mount_point);
+                LOG(ERROR) << "failed to mount " << v->mount_point;
                 return -1;
             }
 
         } else {
+<<<<<<< HEAD
             // datamedia and anything managed by vold must be unmounted
             // with the detach flag to ensure that FUSE works.
             bool detach = false;
@@ -577,6 +629,10 @@ int setup_install_mounts() {
             }
             if (ensure_volume_unmounted(v, detach) != 0) {
                 LOGE("failed to unmount %s\n", v->mount_point);
+=======
+            if (ensure_path_unmounted(v->mount_point) != 0) {
+                LOG(ERROR) << "failed to unmount " << v->mount_point;
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
                 return -1;
             }
         }

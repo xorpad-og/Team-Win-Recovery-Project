@@ -14,31 +14,50 @@
 
 LOCAL_PATH := $(call my-dir)
 
+ifdef project-path-for
+    RECOVERY_PATH := $(call project-path-for,recovery)
+else
+    RECOVERY_PATH := bootable/recovery
+endif
+
 include $(CLEAR_VARS)
 
 otafault_static_libs := \
-    libbase \
-    libminzip \
+    libziparchive \
     libz \
-    libselinux
+    libselinux \
+    libbase \
+    liblog
 
+LOCAL_CFLAGS := -Werror
 LOCAL_SRC_FILES := config.cpp ota_io.cpp
 LOCAL_MODULE_TAGS := eng
 LOCAL_MODULE := libotafault
 LOCAL_CLANG := true
+<<<<<<< HEAD
 LOCAL_C_INCLUDES := $(call project-path-for,recovery)
+=======
+LOCAL_C_INCLUDES := $(RECOVERY_PATH)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)
 LOCAL_WHOLE_STATIC_LIBRARIES := $(otafault_static_libs)
 
 include $(BUILD_STATIC_LIBRARY)
 
+# otafault_test (static executable)
+# ===============================
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := config.cpp ota_io.cpp test.cpp
 LOCAL_MODULE_TAGS := tests
 LOCAL_MODULE := otafault_test
 LOCAL_STATIC_LIBRARIES := $(otafault_static_libs)
+<<<<<<< HEAD
 LOCAL_C_INCLUDES := $(call project-path-for,recovery)
+=======
+LOCAL_CFLAGS := -Werror
+LOCAL_C_INCLUDES := $(RECOVERY_PATH)
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_FORCE_STATIC_EXECUTABLE := true
 
 include $(BUILD_EXECUTABLE)

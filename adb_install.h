@@ -17,10 +17,16 @@
 #ifndef _ADB_INSTALL_H
 #define _ADB_INSTALL_H
 
-class RecoveryUI;
+//class RecoveryUI;
 
+<<<<<<< HEAD
 void start_sideload(RecoveryUI* h, bool* wipe_cache, const char* install_file);
 void stop_sideload();
 int  wait_sideload();
+=======
+static void set_usb_driver(bool enabled);
+static void maybe_restart_adbd();
+int apply_from_adb(const char* install_file, pid_t* child_pid);
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 
 #endif

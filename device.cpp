@@ -147,7 +147,7 @@ Device::BuiltinAction Device::InvokeMenuItem(int menu_position) {
   return entry->action.action;
 }
 
-int Device::HandleMenuKey(int key, int visible) {
+int Device::HandleMenuKey(int key, bool visible) {
   if (!visible) {
     return kNoAction;
   }

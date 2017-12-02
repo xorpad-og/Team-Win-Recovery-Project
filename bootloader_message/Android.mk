@@ -21,6 +21,11 @@ LOCAL_CLANG := true
 LOCAL_SRC_FILES := bootloader_message.cpp
 LOCAL_MODULE := libbootloader_message
 LOCAL_STATIC_LIBRARIES := libbase libfs_mgr
+LOCAL_CFLAGS := -Werror
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 26; echo $$?),0)
+    TARGET_GLOBAL_CFLAGS += -DUSE_OLD_BOOTLOADER_MESSAGE
+    CLANG_TARGET_GLOBAL_CFLAGS += -DUSE_OLD_BOOTLOADER_MESSAGE
+endif
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/include
 LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/include
 include $(BUILD_STATIC_LIBRARY)

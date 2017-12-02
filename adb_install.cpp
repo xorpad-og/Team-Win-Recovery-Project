@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <stdio.h>
 
 #include "ui.h"
 #include "cutils/properties.h"
@@ -32,36 +33,59 @@
 #include "adb_install.h"
 #include "minadbd/fuse_adb_provider.h"
 #include "fuse_sideload.h"
+#ifdef USE_OLD_VERIFIER
+#include "verifier24/verifier.h"
+#else
+#include "verifier.h"
+#endif
 
+<<<<<<< HEAD
 static RecoveryUI* ui = NULL;
 static pthread_t sideload_thread;
 
 static void
 set_usb_driver(bool enabled) {
+=======
+static void set_usb_driver(bool enabled) {
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
     int fd = open("/sys/class/android_usb/android0/enable", O_WRONLY);
     if (fd < 0) {
+/* These error messages show when built in older Android branches (e.g. Gingerbread)
+   It's not a critical error so we're disabling the error messages.
         ui->Print("failed to open driver control: %s\n", strerror(errno));
+*/
+		printf("failed to open driver control: %s\n", strerror(errno));
         return;
     }
+
     if (TEMP_FAILURE_RETRY(write(fd, enabled ? "1" : "0", 1)) == -1) {
+/*
         ui->Print("failed to set driver control: %s\n", strerror(errno));
+*/
+		printf("failed to set driver control: %s\n", strerror(errno));
     }
     if (close(fd) < 0) {
+/*
         ui->Print("failed to close driver control: %s\n", strerror(errno));
+*/
+		printf("failed to close driver control: %s\n", strerror(errno));
     }
 }
 
-static void
-stop_adbd() {
+static void stop_adbd() {
+    printf("Stopping adbd...\n");
     property_set("ctl.stop", "adbd");
     set_usb_driver(false);
 }
 
+static bool is_ro_debuggable() {
+    char value[PROPERTY_VALUE_MAX+1];
+    return (property_get("ro.debuggable", value, NULL) == 1 && value[0] == '1');
+}
 
-static void
-maybe_restart_adbd() {
+static void maybe_restart_adbd() {
     if (is_ro_debuggable()) {
-        ui->Print("Restarting adbd...\n");
+        printf("Restarting adbd...\n");
         set_usb_driver(true);
         property_set("ctl.start", "adbd");
     }
@@ -80,15 +104,38 @@ static struct sideload_data sideload_data;
 // package, before timing out.
 #define ADB_INSTALL_TIMEOUT 300
 
+<<<<<<< HEAD
 void *adb_sideload_thread(void* v) {
+=======
+int
+apply_from_adb(const char* install_file, pid_t* child_pid) {
+
+    stop_adbd();
+    set_usb_driver(true);
+/*
+int apply_from_adb(RecoveryUI* ui, bool* wipe_cache, const char* install_file) {
+    modified_flash = true;
+
+    stop_adbd(ui);
+    set_usb_driver(ui, true);
+
+    ui->Print("\n\nNow send the package you want to apply\n"
+              "to the device with \"adb sideload <filename>\"...\n");
+*/
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
     pid_t child;
     if ((child = fork()) == 0) {
-        execl("/sbin/recovery", "recovery", "--adbd", NULL);
+        execl("/sbin/recovery", "recovery", "--adbd", install_file, NULL);
         _exit(-1);
     }
 
+<<<<<<< HEAD
     time_t start_time = time(NULL);
     time_t now = start_time;
+=======
+    *child_pid = child;
+    // caller can now kill the child thread from another thread
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 
     // FUSE_SIDELOAD_HOST_PATHNAME will start to exist once the host
     // connects and starts serving a package.  Poll for its
@@ -96,6 +143,7 @@ void *adb_sideload_thread(void* v) {
     int result = INSTALL_NONE;
     int status = -1;
     struct stat st;
+<<<<<<< HEAD
     while (now - start_time < ADB_INSTALL_TIMEOUT) {
         /*
          * Exit if either:
@@ -128,6 +176,38 @@ void *adb_sideload_thread(void* v) {
     if (status == 0) {
         // Signal UI thread that we can no longer cancel
         ui->CancelWaitKey();
+=======
+    for (int i = 0; i < ADB_INSTALL_TIMEOUT; ++i) {
+        if (waitpid(child, &status, WNOHANG) != 0) {
+            result = -1;
+            waited = true;
+            break;
+        }
+
+        if (stat(FUSE_SIDELOAD_HOST_PATHNAME, &st) != 0) {
+            if (errno == ENOENT && i < ADB_INSTALL_TIMEOUT-1) {
+                sleep(1);
+                continue;
+            } else {
+                printf("\nTimed out waiting for package: %s\n\n", strerror(errno));
+                result = -1;
+                kill(child, SIGKILL);
+                break;
+            }
+        }
+        // Install is handled elsewhere in TWRP
+        //install_package(FUSE_SIDELOAD_HOST_PATHNAME, wipe_cache, install_file, false);
+	return 0;
+    }
+
+    // if we got here, something failed
+    *child_pid = 0;
+
+    if (!waited) {
+        // Calling stat() on this magic filename signals the minadbd
+        // subprocess to shut down.
+        stat(FUSE_SIDELOAD_HOST_EXIT_PATHNAME, &st);
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 
         result = install_package(FUSE_SIDELOAD_HOST_PATHNAME,
                                  sideload_data.wipe_cache,
@@ -143,9 +223,10 @@ void *adb_sideload_thread(void* v) {
 
     if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
         if (WEXITSTATUS(status) == 3) {
-            ui->Print("\nYou need adb 1.0.32 or newer to sideload\nto this device.\n\n");
+            printf("\nYou need adb 1.0.32 or newer to sideload\nto this device.\n\n");
+            result = -2;
         } else if (!WIFSIGNALED(status)) {
-            ui->Print("\n(adbd status %d)\n", WEXITSTATUS(status));
+            printf("status %d\n", WEXITSTATUS(status));
         }
     }
 

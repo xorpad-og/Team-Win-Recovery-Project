@@ -7,23 +7,38 @@ minadbd_cflags := \
     -Wno-unused-parameter \
     -Wno-missing-field-initializers \
     -DADB_HOST=0 \
+    -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
-    adb_main.cpp \
     fuse_adb_provider.cpp \
-    services.cpp \
+    ../fuse_sideload.cpp \
+    minadbd.cpp \
+    minadbd_services.cpp \
 
 LOCAL_CLANG := true
 LOCAL_MODULE := libminadbd
 LOCAL_CFLAGS := $(minadbd_cflags)
 LOCAL_CONLY_FLAGS := -Wimplicit-function-declaration
+<<<<<<< HEAD
 LOCAL_C_INCLUDES := $(call project-path-for,recovery) system/core/adb
+=======
+LOCAL_C_INCLUDES := $(LOCAL_PATH)/.. system/core/adb
+>>>>>>> 372019c8cde86ba23386bb832241de273348d3a2
 LOCAL_WHOLE_STATIC_LIBRARIES := libadbd
-LOCAL_STATIC_LIBRARIES := libbase
+LOCAL_SHARED_LIBRARIES := libbase liblog libcutils libc
 
-include $(BUILD_STATIC_LIBRARY)
+ifeq ($(shell test $(PLATFORM_SDK_VERSION) -lt 24; echo $$?),0)
+    LOCAL_C_INCLUDES += $(LOCAL_PATH)/libmincrypt/includes
+    LOCAL_SHARED_LIBRARIES += libmincrypttwrp
+    LOCAL_CFLAGS += -DUSE_MINCRYPT
+else
+    LOCAL_SHARED_LIBRARIES += libcrypto \
+    $(if $(WITH_CRYPTO_UTILS),libcrypto_utils)
+endif
+
+include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
 

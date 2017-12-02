@@ -366,7 +366,7 @@ static bool parseZipArchive(ZipArchive* pArchive)
         }
         pEntry->offset = localHdrOffset + LOCHDR
             + get2LE(localHdr + LOCNAM) + get2LE(localHdr + LOCEXT);
-        if (!safe_add(NULL, pEntry->offset, pEntry->compLen)) {
+        if (!safe_add(NULL, pEntry->offset, (typeof(pEntry->offset))pEntry->compLen)) {
             LOGW("Integer overflow adding in parseZipArchive\n");
             goto bail;
         }
@@ -426,6 +426,8 @@ bail:
 int mzOpenZipArchive(unsigned char* addr, size_t length, ZipArchive* pArchive)
 {
     int err;
+
+    memset(pArchive, 0, sizeof(ZipArchive));
 
     if (length < ENDHDR) {
         err = -1;
@@ -966,8 +968,7 @@ bool mzExtractRecursive(const ZipArchive *pArchive,
                 setfscreatecon(secontext);
             }
 
-            int fd = open(targetFile, O_CREAT|O_WRONLY|O_TRUNC|O_SYNC,
-                UNZIP_FILEMODE);
+            int fd = creat(targetFile, UNZIP_FILEMODE);
 
             if (secontext) {
                 freecon(secontext);
@@ -982,12 +983,7 @@ bool mzExtractRecursive(const ZipArchive *pArchive,
             }
 
             bool ok = mzExtractZipEntryToFile(pArchive, pEntry, fd);
-            if (ok) {
-                ok = (fsync(fd) == 0);
-            }
-            if (close(fd) != 0) {
-                ok = false;
-            }
+            close(fd);
             if (!ok) {
                 LOGE("Error extracting \"%s\"\n", targetFile);
                 ok = false;
